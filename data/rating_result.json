@@ -1,0 +1,55 @@
+{
+  "base_score": 5.6,
+  "adjusted_score": 0.0,
+  "final_score": 0.0,
+  "scaled_score": 0,
+  "rating": "F",
+  "rating_desc": "Claude 初接触",
+  "dim_scores": {
+    "D1": 0.0,
+    "D2": 0.0,
+    "D3": 28.0,
+    "D4": 0.0,
+    "D5": 0.0,
+    "D6": 0.0
+  },
+  "bonus_detail": {
+    "weak_d1": {
+      "value": -8.0,
+      "desc": "提示词基础严重不足"
+    },
+    "weak_d2": {
+      "value": -4.0,
+      "desc": "上下文管理缺失"
+    },
+    "weak_d5": {
+      "value": -5.0,
+      "desc": "几乎不迭代优化"
+    }
+  },
+  "ceiling_detail": [],
+  "source_breakdown": {
+    "questionnaire": 5.6,
+    "logs_correction": 0.0,
+    "hooks_stability": 0.0
+  },
+  "confidence": {
+    "log_confidence": 0.03,
+    "sample_size": 0,
+    "coverage_days": 1
+  },
+  "conflict_adjustment": {
+    "detected": false,
+    "policy": "anti_self_inflation",
+    "delta": 0.0,
+    "reason": "日志样本不足，未启用冲突下调",
+    "gap": 0.0,
+    "tier": "no_data",
+    "questionnaire_score": 28.0,
+    "log_score_proxy": 2.14
+  },
+  "suggestions": [
+    "[D1] 优先提升提示词工程能力",
+    "[D2] 优先提升上下文管理能力"
+  ]
+}

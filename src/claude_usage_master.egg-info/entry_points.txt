@@ -1,2 +1,0 @@
-[console_scripts]
-rate = claude_usage_master.cli:app

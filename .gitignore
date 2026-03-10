@@ -1,0 +1,21 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+
+# Packaging artifacts
+*.egg-info/
+
+# Test/runtime caches
+.pytest_cache/
+
+# IDE files
+.idea/
+
+# Local runtime outputs
+data/rating_result.json
+data/ratings_history.json
+reports/index.html
+
+# Local environment file
+.env
+

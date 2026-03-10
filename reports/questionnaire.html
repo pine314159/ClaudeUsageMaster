@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claude 使用熟练度问卷</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 24px; color: #111827; background: #f9fafb; }
+    h1 { margin-bottom: 6px; }
+    h2 { margin-top: 28px; }
+    .muted { color: #6b7280; }
+    .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; background: #fff; margin-bottom: 12px; }
+    .q-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+    .q-desc { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+    .opt { display: block; padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; margin: 6px 0; }
+    .opt input { margin-right: 8px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 12px; }
+    button { padding: 8px 12px; border: 1px solid #2563eb; color: #fff; background: #2563eb; border-radius: 8px; cursor: pointer; }
+    button.secondary { border-color: #9ca3af; background: #fff; color: #374151; }
+    textarea { width: 100%; min-height: 220px; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    #msg.ok { color: #047857; }
+    #msg.err { color: #b91c1c; }
+    .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #eef2ff; color: #4338ca; font-size: 12px; }
+    details.guide { border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 10px 12px; margin-bottom: 10px; }
+    details.guide summary { cursor: pointer; font-weight: 600; }
+    details.guide p { margin: 8px 0 0; color: #374151; }
+  </style>
+</head>
+<body>
+  <h1>用户自评问卷（静态页）</h1>
+  <p class="muted">题目参考 `draft.md`，提交后将通过本地服务覆盖 <code>data/questionnaire.json</code>。</p>
+  <p><span class="pill">输出字段：q1~q22 + q10_depth</span></p>
+
+  <h2>填写提示（按维度理解熟练度）</h2>
+  <details class="guide" open>
+    <summary>D1 提示词工程</summary>
+    <p>看你是否能稳定产出“可控提示”，而不是随机提问。</p>
+  </details>
+  <details class="guide">
+    <summary>D2 上下文管理</summary>
+    <p>看你是否能持续给对信息并控制上下文质量。</p>
+  </details>
+  <details class="guide">
+    <summary>D3 工具深度</summary>
+    <p>看你是否从“试用”走向“稳定融入工作流”。</p>
+  </details>
+  <details class="guide">
+    <summary>D4 任务拆解</summary>
+    <p>看你是否有分阶段推进和依赖管理能力。</p>
+  </details>
+  <details class="guide">
+    <summary>D5 迭代优化</summary>
+    <p>看你是否形成校验、纠错、复盘闭环。</p>
+  </details>
+  <details class="guide">
+    <summary>D6 工作流集成</summary>
+    <p>看你是否把 Claude 接入真实开发链路。</p>
+  </details>
+
+  <h2>D1~D2 / D4~D6 题目（q1~q9, q11~q22）</h2>
+  <div id="question-box"></div>
+
+  <h2>D3 深度分层（q10_depth）</h2>
+  <p class="muted">每项 0~3：0=未用过，1=试过，2=常用，3=深度依赖</p>
+  <div id="q10-box"></div>
+
+  <div class="actions">
+    <button id="submit-btn" type="button">提交</button>
+  </div>
+
+  <p id="msg" class="muted"></p>
+  <label for="output" class="muted">问卷 JSON 预览</label>
+  <textarea id="output" spellcheck="false" placeholder="这里会显示问卷 JSON"></textarea>
+
+  <script>
+    const QUESTIONS = [
+      { key: "q1", title: "Q1. 你是否会先定义 Claude 的角色、任务目标和成功标准？", options: [
+        [0, "基本不定义，直接提问"],
+        [3, "偶尔会给角色或目标"],
+        [5, "稳定给出角色+目标+可验证成功标准"]
+      ]},
+      { key: "q2", title: "Q2. 你是否明确约束 Claude 的输出格式（JSON/表格/结构化 Markdown）？", options: [
+        [0, "几乎不约束"],
+        [3, "复杂任务时会约束"],
+        [5, "多数任务都指定格式并复用模板"]
+      ]},
+      { key: "q3", title: "Q3. 你是否会提供示例（few-shot）来提升 Claude 输出稳定性？", options: [
+        [0, "从不用"],
+        [3, "偶尔提供 1~2 个示例"],
+        [5, "系统提供正反例并覆盖边界"]
+      ]},
+      { key: "q4", title: "Q4. 你是否会设置限制与排除条件（不要做什么）？", options: [
+        [0, "几乎不设置"],
+        [3, "偶尔设置"],
+        [5, "系统使用正向约束+负向约束"]
+      ]},
+      { key: "q5", title: "Q5. 首轮结果不理想时，你是否会结构化重写 Prompt？", options: [
+        [0, "主要重复提问"],
+        [3, "会做一些改写"],
+        [5, "按目标/上下文/约束/验收标准重写"]
+      ]},
+      { key: "q6", title: "Q6. 你是否主动提供项目背景（技术栈、约束、上下游）？", options: [
+        [0, "很少提供"],
+        [3, "视情况提供"],
+        [5, "有背景模板并按任务裁剪"]
+      ]},
+      { key: "q7", title: "Q7. 长对话中你是否会让 Claude 定期总结并校准上下文？", options: [
+        [0, "基本不做"],
+        [3, "偶尔总结"],
+        [5, "固定做阶段总结+下一步确认"]
+      ]},
+      { key: "q8", title: "Q8. 你是否管理上下文长度（删冗余、提关键、分段推进）？", options: [
+        [0, "不管理"],
+        [3, "有时管理"],
+        [5, "有明确上下文压缩策略并执行"]
+      ]},
+      { key: "q9", title: "Q9. 你是否沉淀跨会话可复用信息（Projects/系统提示/知识卡片）？", options: [
+        [0, "每次从零开始"],
+        [3, "有零散沉淀"],
+        [5, "有复用资产并持续维护"]
+      ]},
+      { key: "q11", title: "Q11. 面对复杂需求，你是否先让 Claude 产出任务拆解再执行？", options: [
+        [0, "通常一次性让它做完"],
+        [3, "偶尔先拆解"],
+        [5, "基本总是先拆解再执行"]
+      ]},
+      { key: "q12", title: "Q12. 你是否按阶段推进任务（分析→方案→实现→验证）？", options: [
+        [0, "无阶段意识"],
+        [3, "部分任务会分阶段"],
+        [5, "固定分阶段且每阶段有产出"]
+      ]},
+      { key: "q13", title: "Q13. 你是否定义每一步验收标准（done criteria）？", options: [
+        [0, "基本不定义"],
+        [3, "关键步骤会定义"],
+        [5, "每步定义并回查"]
+      ]},
+      { key: "q14", title: "Q14. 你是否管理子任务依赖和优先级（先后/阻塞）？", options: [
+        [0, "基本不管理"],
+        [3, "粗略管理"],
+        [5, "系统管理并动态调整"]
+      ]},
+      { key: "q15", title: "Q15. 你是否对 Claude 输出做事实与逻辑校验？", options: [
+        [0, "几乎直接采用"],
+        [3, "关键场景会校验"],
+        [5, "有固定校验清单并执行"]
+      ]},
+      { key: "q16", title: "Q16. 你是否进行多轮优化并记录改动依据与效果？", options: [
+        [0, "不记录"],
+        [3, "偶尔记录"],
+        [5, "系统记录并可复盘迁移"]
+      ]},
+      { key: "q17", title: "Q17. Claude 出错时，你是否能提供纠错上下文高质量修复？", options: [
+        [0, "只说‘错了重来’"],
+        [3, "会补充部分上下文"],
+        [5, "给错误定位+期望行为+反例"]
+      ]},
+      { key: "q18", title: "Q18. 你是否维护个人 Prompt/工作流库？", options: [
+        [0, "没有"],
+        [3, "有零散收藏"],
+        [5, "有结构化库并持续迭代"]
+      ]},
+      { key: "q19", title: "Q19. Claude 在你开发流程中的位置？", options: [
+        [0, "临时辅助"],
+        [3, "高频协作工具"],
+        [5, "核心节点（分析/实现/验证均参与）"]
+      ]},
+      { key: "q20", title: "Q20. 你是否将 Claude 接入自动化流程（脚本/API/CI）？", options: [
+        [0, "全手动"],
+        [3, "有部分自动化"],
+        [5, "有稳定自动化链路"]
+      ]},
+      { key: "q21", title: "Q21. 你是否实现与开发工具链联动（IDE/Git/测试/文档）？", options: [
+        [0, "基本无联动"],
+        [3, "有单点联动"],
+        [5, "有多工具协同闭环"]
+      ]},
+      { key: "q22", title: "Q22. 你是否明确 Claude 能力边界并设置风险控制？", options: [
+        [0, "边界认知较弱"],
+        [3, "有基本认知"],
+        [5, "有清晰边界策略并执行"]
+      ]},
+    ];
+
+    const Q10_FEATURES = [
+      ["code_gen", "代码生成与调试"],
+      ["file_analysis", "文件分析"],
+      ["artifacts", "Artifacts"],
+      ["projects", "Projects + Memory"],
+      ["system_prompt", "System Prompt"],
+      ["api", "Claude API"],
+      ["claude_code", "Claude Code CLI"],
+      ["mcp", "MCP"],
+    ];
+
+    const LEVEL_OPTIONS = [
+      [0, "0 - 未用过"],
+      [1, "1 - 试过（偶发）"],
+      [2, "2 - 常用（稳定使用）"],
+      [3, "3 - 深度依赖（已融入工作流）"],
+    ];
+
+    const QUESTION_HINTS = {
+      q1: "关注是否先定义任务边界与成功标准。",
+      q2: "关注输出可控性与格式复用。",
+      q3: "关注示例驱动的稳定输出能力。",
+      q4: "关注风险控制与负向约束意识。",
+      q5: "关注提示词重构能力而非重复提问。",
+      q6: "关注背景输入完整度。",
+      q7: "关注长对话中的上下文校准。",
+      q8: "关注上下文压缩与信息密度管理。",
+      q9: "关注跨会话知识沉淀能力。",
+      q11: "关注先拆解再执行的习惯。",
+      q12: "关注阶段化推进能力。",
+      q13: "关注验收标准定义能力。",
+      q14: "关注依赖与优先级管理。",
+      q15: "关注事实与逻辑校验习惯。",
+      q16: "关注迭代记录与复盘。",
+      q17: "关注纠错输入质量。",
+      q18: "关注个人方法资产化。",
+      q19: "关注 Claude 在流程中的角色深度。",
+      q20: "关注自动化接入深度。",
+      q21: "关注工具链联动广度与稳定性。",
+      q22: "关注边界认知与风险控制执行。",
+    };
+
+    const questionBox = document.getElementById("question-box");
+    const q10Box = document.getElementById("q10-box");
+    const output = document.getElementById("output");
+    const msg = document.getElementById("msg");
+
+    function renderQuestions() {
+      for (const item of QUESTIONS) {
+        const card = document.createElement("section");
+        card.className = "card";
+
+        const title = document.createElement("div");
+        title.className = "q-title";
+        title.textContent = item.title;
+
+        const desc = document.createElement("div");
+        desc.className = "q-desc";
+        desc.textContent = QUESTION_HINTS[item.key] || "";
+
+        card.appendChild(title);
+        card.appendChild(desc);
+
+        for (const [value, text] of item.options) {
+          const label = document.createElement("label");
+          label.className = "opt";
+
+          const radio = document.createElement("input");
+          radio.type = "radio";
+          radio.name = item.key;
+          radio.value = String(value);
+          if (value === 0) {
+            radio.checked = true;
+          }
+
+          label.appendChild(radio);
+          label.appendChild(document.createTextNode(`${text}（${value}分）`));
+          card.appendChild(label);
+        }
+
+        questionBox.appendChild(card);
+      }
+    }
+
+    function renderQ10() {
+      for (const [feature, labelText] of Q10_FEATURES) {
+        const card = document.createElement("section");
+        card.className = "card";
+
+        const title = document.createElement("div");
+        title.className = "q-title";
+        title.textContent = `${feature} - ${labelText}`;
+        card.appendChild(title);
+
+        for (const [value, text] of LEVEL_OPTIONS) {
+          const label = document.createElement("label");
+          label.className = "opt";
+
+          const radio = document.createElement("input");
+          radio.type = "radio";
+          radio.name = `q10_${feature}`;
+          radio.value = String(value);
+          if ((feature === "api" || feature === "claude_code") && value === 2) {
+            radio.checked = true;
+          }
+          if (!(feature === "api" || feature === "claude_code") && value === 0) {
+            radio.checked = true;
+          }
+
+          label.appendChild(radio);
+          label.appendChild(document.createTextNode(text));
+          card.appendChild(label);
+        }
+
+        q10Box.appendChild(card);
+      }
+    }
+
+    function pickInt(name) {
+      const selected = document.querySelector(`input[name="${name}"]:checked`);
+      return selected ? Number(selected.value) : null;
+    }
+
+    function collectPayload() {
+      const payload = {};
+      const missing = [];
+
+      for (const item of QUESTIONS) {
+        const v = pickInt(item.key);
+        if (v === null) {
+          missing.push(item.key);
+          continue;
+        }
+        payload[item.key] = v;
+      }
+
+      const q10Depth = {};
+      for (const [feature] of Q10_FEATURES) {
+        const v = pickInt(`q10_${feature}`);
+        if (v === null) {
+          missing.push(`q10_${feature}`);
+          continue;
+        }
+        q10Depth[feature] = v;
+      }
+      payload.q10_depth = q10Depth;
+
+      return { payload, missing };
+    }
+
+    function setMessage(text, ok) {
+      msg.textContent = text;
+      msg.className = ok ? "ok" : "err";
+    }
+
+    function buildJson() {
+      const { payload, missing } = collectPayload();
+      if (missing.length > 0) {
+        setMessage(`仍有未填写项：${missing.slice(0, 6).join(", ")}${missing.length > 6 ? " ..." : ""}`, false);
+        return null;
+      }
+      const json = JSON.stringify(payload, null, 2);
+      output.value = json;
+      return json;
+    }
+
+    async function submitToLocalService(content) {
+      const resp = await fetch("/api/questionnaire", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: content,
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(data.error || `HTTP ${resp.status}`);
+      }
+      return data;
+    }
+
+    document.getElementById("submit-btn").addEventListener("click", async () => {
+      const content = buildJson();
+      if (!content) {
+        return;
+      }
+
+      try {
+        const result = await submitToLocalService(content);
+        setMessage(`提交成功：已覆盖 ${result.path || "questionnaire.json"}。`, true);
+      } catch (e) {
+        setMessage(`提交失败：${e.message}。请先运行 rate serve 并通过服务地址打开页面。`, false);
+      }
+    });
+
+    renderQuestions();
+    renderQ10();
+    output.value = JSON.stringify(collectPayload().payload, null, 2);
+  </script>
+</body>
+</html>
+

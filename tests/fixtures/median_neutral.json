@@ -1,0 +1,43 @@
+{
+  "case_id": "median_neutral",
+  "questionnaire": {
+    "q1": 3,
+    "q2": 3,
+    "q3": 3,
+    "q4": 3,
+    "q5": 3,
+    "q6": 3,
+    "q7": 3,
+    "q8": 3,
+    "q9": 3,
+    "q10_depth": {
+      "api": 2,
+      "claude_code": 2
+    },
+    "q11": 3,
+    "q12": 3,
+    "q13": 3,
+    "q14": 3,
+    "q15": 3,
+    "q16": 3,
+    "q17": 3,
+    "q18": 3,
+    "q19": 3,
+    "q20": 3,
+    "q21": 3,
+    "q22": 3
+  },
+  "fusion": {
+    "sample_size": 0,
+    "coverage_days": 0
+  },
+  "expected": {
+    "rating_in": ["A", "B"],
+    "final_score_range": [45, 75],
+    "conflict_detected": false,
+    "conflict_tier": "no_data",
+    "log_confidence_range": [0.0, 0.0],
+    "logs_correction_range": [0.0, 0.0]
+  }
+}
+

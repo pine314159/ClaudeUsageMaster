@@ -1,0 +1,50 @@
+{
+  "case_id": "conflict_low_conf",
+  "questionnaire": {
+    "q1": 4,
+    "q2": 4,
+    "q3": 4,
+    "q4": 4,
+    "q5": 4,
+    "q6": 4,
+    "q7": 4,
+    "q8": 4,
+    "q9": 4,
+    "q10_depth": {
+      "code_gen": 3,
+      "file_analysis": 3,
+      "artifacts": 3,
+      "projects": 3,
+      "system_prompt": 3,
+      "api": 3,
+      "claude_code": 3,
+      "mcp": 3
+    },
+    "q11": 4,
+    "q12": 4,
+    "q13": 4,
+    "q14": 4,
+    "q15": 4,
+    "q16": 4,
+    "q17": 4,
+    "q18": 4,
+    "q19": 4,
+    "q20": 4,
+    "q21": 4,
+    "q22": 4
+  },
+  "fusion": {
+    "sample_size": 1,
+    "coverage_days": 1
+  },
+  "expected": {
+    "rating_in": ["SS"],
+    "final_score_range": [97, 100],
+    "conflict_detected": true,
+    "conflict_tier": "strong",
+    "conflict_delta_range": [-1.6, -1.4],
+    "log_confidence_range": [0.0, 0.1],
+    "logs_correction_range": [-2.0, -1.9],
+    "reason_contains": "低置信度半幅执行"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "case_id": "high_score",
+  "questionnaire": {
+    "q1": 5,
+    "q2": 5,
+    "q3": 5,
+    "q4": 5,
+    "q5": 5,
+    "q6": 5,
+    "q7": 5,
+    "q8": 5,
+    "q9": 5,
+    "q10_depth": {
+      "code_gen": 3,
+      "file_analysis": 3,
+      "artifacts": 3,
+      "projects": 3,
+      "system_prompt": 3,
+      "api": 3,
+      "claude_code": 3,
+      "mcp": 3
+    },
+    "q11": 5,
+    "q12": 5,
+    "q13": 5,
+    "q14": 5,
+    "q15": 5,
+    "q16": 5,
+    "q17": 5,
+    "q18": 5,
+    "q19": 5,
+    "q20": 5,
+    "q21": 5,
+    "q22": 5
+  },
+  "fusion": {
+    "sample_size": 30,
+    "coverage_days": 14
+  },
+  "expected": {
+    "rating_in": ["SS"],
+    "final_score_range": [95, 100],
+    "conflict_detected": false,
+    "conflict_tier": "none",
+    "log_confidence_range": [0.95, 1.0],
+    "logs_correction_range": [2.5, 3.5]
+  }
+}
+

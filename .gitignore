@@ -11,9 +11,14 @@ __pycache__/
 # IDE files
 .idea/
 
+# Claude
+.claude/
+
 # Local runtime outputs
 data/rating_result.json
 data/ratings_history.json
+data/claude_scan_checkpoint.json
+data/log_checkpoint.json
 reports/index.html
 
 # Local environment file

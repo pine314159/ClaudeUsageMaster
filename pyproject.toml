@@ -3,7 +3,7 @@ name = "claude-usage-master"
 version = "0.1.0"
 description = "Local self-assessment toolkit for Claude usage proficiency"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11.4"
 dependencies = [
   "pydantic>=2.7,<3",
   "pydantic-settings>=2.3,<3",
@@ -37,5 +37,5 @@ addopts = "-q"
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py311"
 

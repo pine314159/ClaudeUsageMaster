@@ -3,6 +3,7 @@ from pathlib import Path
 import typer
 
 from . import __version__
+from .claude_log_scanner import scan_claude_logs
 from .dimension_scorer import score_dimensions
 from .explain_service import assemble_result
 from .fusion_service import fuse_sources
@@ -30,7 +31,17 @@ def run_rating(
     history_path: Path = typer.Option(Path("data/ratings_history.json"), "--history", help="rating history JSON"),
     report_path: Path = typer.Option(Path("reports/index.html"), "--report", help="local HTML report"),
     checkpoint_path: Path = typer.Option(Path("data/log_checkpoint.json"), "--checkpoint", help="log checkpoint JSON"),
+    scan_checkpoint_path: Path = typer.Option(
+        Path("data/claude_scan_checkpoint.json"), "--scan-checkpoint", help="Claude log scan checkpoint JSON"
+    ),
+    no_scan: bool = typer.Option(False, "--no-scan", help="skip auto-scanning Claude Code local logs"),
 ) -> None:
+    if not no_scan:
+        events_path = logs_dir / "events.jsonl"
+        n = scan_claude_logs(output_path=events_path, scan_checkpoint_path=scan_checkpoint_path)
+        if n:
+            typer.echo(f"scanned {n} new events from Claude Code logs")
+
     questionnaire = load_questionnaire(input_path)
     dim_scores = score_dimensions(questionnaire)
     result = evaluate(dim_scores)

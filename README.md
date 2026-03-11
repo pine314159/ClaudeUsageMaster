@@ -1,319 +1,142 @@
-# Claude 使用熟练度评级系统 - 架构设计
+# Claude 使用熟练度评级系统
 
-## 任务目标与边界
+评估开发者对 Claude 的使用熟练度，输出 `F / D / C / B / A / S / SS` 等级，并给出分项说明与改进建议。
 
-本系统仅评估**开发者对 Claude 的使用熟练度**，不直接评估业务绩效、代码质量或团队产出。
-
-- 适用对象：开发者
-- 等级体系：`F / D / C / B / A / S / SS`
-- 维度体系：`D1~D6`
-- 三源策略：**问卷定基础、日志做校正、Hooks 做长期稳定性补充**
+**三源策略：问卷定基础、日志做校正、Hooks 做长期稳定性补充。**
 
 ---
 
-## 一、总体架构（分层设计）
-
-```text
-[输入采集层]
-  - 问卷答案
-  - 行为日志
-  - Hooks 事件
-        |
-        v
-[标准化与校验层]
-  - 字段校验
-  - 维度映射
-  - 数据质量检查
-        |
-        v
-[评分核心层]
-  - 维度计算(D1~D6)
-  - 基础分(base_score)
-  - 规则加减分(adjusted_score)
-  - 天花板封顶(final_score)
-  - 等级映射(rating)
-        |
-        v
-[融合与校正层]
-  - 日志置信度
-  - 弱修正策略
-  - 反自评膨胀冲突处理
-  - Hooks 稳定性补充
-        |
-        v
-[解释与输出层]
-  - 分数来源拆解
-  - 命中规则与封顶原因
-  - 冲突修正说明
-  - 改进建议
-```
-
-该架构是“主干稳定、侧向可扩展”的组织方式：评分主链保证一致性，日志/Hooks 作为可插拔增强层。
-
----
-
-## 二、功能模块划分
-
-### 1) `questionnaire_adapter`
-负责接收与标准化问卷输入。
-
-- 输入：`Q1~Q22`、`Q10` 分层能力项
-- 输出：标准化问卷数据结构（缺省补值、合法值范围）
-- 关键职责：避免脏数据直接进入评分核心
-
-### 2) `dimension_scorer`
-负责六维度分数计算。
-
-- `D1` 提示词工程
-- `D2` 上下文管理
-- `D3` 工具与功能使用深度（分层系数）
-- `D4` 任务拆解
-- `D5` 迭代优化
-- `D6` 工作流集成
-
-输出 `dim_scores`（每维 0-100）。
-
-### 3) `rating_engine`
-负责评分主链，保证口径统一。
-
-- 按权重计算 `base_score`
-- 应用 `BONUS_RULES` 得到 `adjusted_score`
-- 应用 `CEILING_RULES` 得到 `final_score`
-- 映射 `RATING_TIERS` 产出等级
-
-输出核心评分结果并保留规则命中明细。
-
-### 4) `log_analyzer`
-负责日志侧校正能力。
-
-- 计算日志置信度（样本量 + 覆盖天数）
-- 根据置信度限制修正幅度（弱修正）
-- 生成 `logs_correction` 与可信度说明
-
-### 5) `hooks_tracker`
-负责长期稳定性补充。
-
-- 追踪长期使用习惯指标
-- 仅提供小幅稳定性奖励
-- 不参与基础评分主干
-
-输出 `hooks_stability` 增量与依据。
-
-### 6) `fusion_service`
-负责三源融合与冲突处理。
-
-- 合并问卷主干、日志修正、Hooks 补充
-- 执行反自评膨胀策略（冲突时优先保守下调）
-- 输出 `source_breakdown` 与 `conflict_adjustment`
-
-### 7) `explain_service`
-负责可解释输出组装。
-
-- 汇总规则命中、封顶原因、修正原因
-- 生成针对维度短板的改进建议
-- 输出符合契约的 `RatingResult`
-
----
-
-## 三、核心数据流
-
-```text
-问卷输入
-  -> questionnaire_adapter
-  -> dimension_scorer
-  -> rating_engine (base -> adjusted -> final -> rating)
-
-日志输入
-  -> log_analyzer (confidence + correction)
-
-Hooks 输入
-  -> hooks_tracker (stability)
-
-主链结果 + 两侧补充
-  -> fusion_service (含冲突策略)
-  -> explain_service
-  -> 最终评级结果(JSON)
-```
-
-说明：无问卷时不输出正式评级；日志与 Hooks 只对主链做有限校正与补充。
-
----
-
-## 四、输出数据契约
-
-最终输出至少包含以下字段：
-
-```json
-{
-  "base_score": 62.4,
-  "adjusted_score": 67.4,
-  "final_score": 65.0,
-  "scaled_score": 650,
-  "rating": "A",
-  "dim_scores": {"D1": 58, "D2": 70, "D3": 66, "D4": 60, "D5": 72, "D6": 55},
-  "bonus_detail": {},
-  "ceiling_detail": [],
-  "source_breakdown": {
-    "questionnaire": 65.0,
-    "logs_correction": -1.5,
-    "hooks_stability": 1.5
-  },
-  "confidence": {
-    "log_confidence": 0.42,
-    "sample_size": 18,
-    "coverage_days": 9
-  },
-  "conflict_adjustment": {
-    "detected": true,
-    "policy": "anti_self_inflation",
-    "tier": "mild",
-    "gap": 12.0,
-    "delta": -1.5,
-    "reason": "问卷D3高于日志代理，保守下调"
-  },
-  "suggestions": [
-    "[D1] 强化约束式 prompt 与 few-shot",
-    "[D6] 把 Claude 固化到开发工作流节点"
-  ]
-}
-```
-
----
-
-## 五、为什么这样设计（设计思路）
-
-### 1) 先稳定评分主链，再引入侧向校正
-当前版本的核心任务是口径统一与可解释性，因此把问卷评分链路作为唯一主干，避免被外部噪声破坏一致性。
-
-### 2) 分层解耦，便于独立迭代
-日志、Hooks、解释输出都通过独立模块接入，不和评分计算强耦合，后续可单独优化而不重写主链。
-
-### 3) 把“冲突处理”显式化
-将反自评膨胀策略写成独立能力而不是隐式规则，便于审计和复盘，减少“看不懂分数变化”的风险。
-
-### 4) 以数据契约驱动实现
-先定义输出字段和解释要求，再反推模块输入输出，保证前后端和算法逻辑能并行开发。
-
----
-
-## 六、这样设计的好处
-
-- **一致性强**：评分边界、规则命中、等级映射统一，减少断档和冲突。
-- **可解释性高**：用户可看到分数来源、封顶原因、冲突修正与改进建议。
-- **可扩展**：新增日志特征、Hooks 指标或展示渠道时不影响评分主链。
-- **抗噪声**：通过置信度和弱修正机制，降低少量样本导致的误判。
-- **便于工程协作**：模块职责清晰，可并行开发 `rating_engine.py`、`log_analyzer.py`、`hooks_tracker.py`。
-
----
-
-## 七、建议实施顺序
-
-1. 实现 `dimension_scorer` + `rating_engine`，打通问卷主链。
-2. 实现 `log_analyzer`，加入置信度与弱修正上限。
-3. 实现 `hooks_tracker`，只做长期稳定性补充。
-4. 实现 `fusion_service` 与 `explain_service`，输出完整契约。
-5. 增加结果展示：封顶原因、冲突修正、维度改进建议。
-
----
-
-## 八、非目标声明
-
-本系统不输出以下结论：
-
-- 业务价值评分
-- 代码能力评分
-- 团队绩效评分
-
-系统输出仅表示用户对 Claude 的使用熟练度等级。
-
----
-
-## 九、本地运行
-
-当前已实现最小可运行链路：问卷 JSON -> 六维评分 -> 评级结果 JSON -> 本地 HTML 报告。
-
-### 1) 安装依赖
+## 安装
 
 ```bash
-python3 -m pip install -e .[dev]
+python -m pip install -e .[dev]
 ```
 
-### 2) 填写问卷（静态网页）
+---
 
-先启动本地问卷服务：
+## 快速上手
+
+### 1. 填写问卷
+
+启动本地问卷服务：
 
 ```bash
 rate serve --host 127.0.0.1 --port 8765
 ```
 
-然后在浏览器打开：`http://127.0.0.1:8765/`
+浏览器打开 `http://127.0.0.1:8765/`，填写 Q1~Q22 并提交，结果写入 `data/questionnaire.json`。
 
-页面支持：
-- 填写 `q1~q22` 与 `q10_depth`
-- 点击“提交”直接覆盖 `data/questionnaire.json`
-
-### 3) 运行评级
+### 2. 运行评级
 
 ```bash
 rate run --input data/questionnaire.json --logs data/logs --report reports/index.html
 ```
 
-运行后会产出：
-- `data/rating_result.json`
-- `data/ratings_history.json`
-- `data/log_checkpoint.json`
-- `reports/index.html`
+运行后生成：
 
-### 4) 可选：融合策略配置（`.env`）
+| 文件 | 说明 |
+|---|---|
+| `data/rating_result.json` | 最新评级结果（含分项明细） |
+| `data/ratings_history.json` | 历史评级记录 |
+| `data/log_checkpoint.json` | 日志读取进度（增量） |
+| `data/claude_scan_checkpoint.json` | Claude Code 日志扫描进度（增量） |
+| `reports/index.html` | 本地静态 HTML 报告 |
 
-可复制 `.env.example` 为 `.env`，通过环境变量调整融合阈值（无需改代码）：
+### 3. 查看报告
+
+直接用浏览器打开 `reports/index.html`，离线可用。
+
+---
+
+## Claude Code 日志自动扫描
+
+`rate run` 在评分前会自动扫描本机 Claude Code 的使用日志（`~/.claude/projects/**/*.jsonl`），无需手动维护 `data/logs/` 目录。
+
+**行为说明：**
+- 只读取上次扫描后新增的行（增量），进度保存在 `data/claude_scan_checkpoint.json`
+- 将用户发送消息的行为转换为 `session_start` / `prompt_submit` 事件，追加写入 `data/logs/events.jsonl`
+- 日志数据越丰富（会话数多、覆盖天数长），评分的置信度与 Hooks 稳定性奖励越高
+
+**跳过自动扫描：**
+
+```bash
+rate run --input data/questionnaire.json --logs data/logs --report reports/index.html --no-scan
+```
+
+**手动放置日志（可选）：**
+
+也可直接向 `data/logs/` 目录追加 `.jsonl` 文件，每行格式：
+
+```json
+{"ts": "2026-03-11T09:00:00Z", "event": "session_start"}
+{"ts": "2026-03-11T09:01:00Z", "event": "prompt_submit"}
+```
+
+---
+
+## 融合策略配置
+
+复制 `.env.example` 为 `.env`，通过环境变量调整融合阈值，无需修改代码：
 
 ```bash
 cp .env.example .env
 ```
 
-常用配置项：
-- `CUM_LOG_CAP_*`：日志修正上限分层阈值
-- `CUM_ASI_*`：冲突策略阈值与惩罚幅度
-- `CUM_HOOKS_*`：Hooks 稳定性奖励门槛与上限
+| 前缀 | 说明 |
+|---|---|
+| `CUM_LOG_CAP_*` | 日志修正幅度上限（按置信度分层） |
+| `CUM_ASI_*` | 反自评膨胀冲突策略阈值与惩罚幅度 |
+| `CUM_HOOKS_*` | Hooks 稳定性奖励门槛与上限 |
 
-### 5) 运行测试
+---
+
+## CLI 参数一览
+
+### `rate run`
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `--input` | （必填） | 问卷 JSON 文件路径 |
+| `--logs` | `data/logs` | 日志目录 |
+| `--output` | `data/rating_result.json` | 评级结果输出路径 |
+| `--history` | `data/ratings_history.json` | 历史记录路径 |
+| `--report` | `reports/index.html` | HTML 报告路径 |
+| `--checkpoint` | `data/log_checkpoint.json` | 日志读取进度文件 |
+| `--scan-checkpoint` | `data/claude_scan_checkpoint.json` | Claude 日志扫描进度文件 |
+| `--no-scan` | `False` | 跳过自动扫描 Claude Code 本地日志 |
+
+### `rate serve`
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `--host` | `127.0.0.1` | 绑定地址 |
+| `--port` | `8765` | 绑定端口 |
+| `--questionnaire` | `data/questionnaire.json` | 问卷结果写入路径 |
+| `--page` | `reports/questionnaire.html` | 问卷页面路径 |
+
+---
+
+## 运行测试
 
 ```bash
 pytest
 ```
 
-### 6) 当前功能范围
+---
 
-- 已实现：`questionnaire_adapter`、`dimension_scorer`、`rating_engine`、`log_ingestor`、`log_analyzer`、`hooks_tracker`、`fusion_service`、`explain_service`、`report_builder`、CLI 一键入口。
-- 已实现：日志置信度 `log_confidence`、弱修正上限 `log_correction_cap`、来源占比卡片（问卷/日志/Hooks）。
-- 已实现：三源融合冲突策略（含 `tier/gap` 元数据与低置信度半幅下调）、解释结果组装、解释文案统一规范、fixtures 样例库。
-- 未实现：后续 backlog 规划。
+## 文档
+
+| 文件 | 说明 |
+|---|---|
+| `docs/architecture.md` | 架构设计、模块划分、数据契约、设计思路 |
+| `docs/acceptance_checklist.md` | 规则一致性验收清单（含测试映射） |
+| `plan.md` | 技术决策记录与阶段开发 Todo |
+| `CHANGELOG.md` | 版本变更记录 |
 
 ---
 
-## 十、发布说明（0.1.0）
+## 当前版本（0.1.0）已知限制
 
-### 发布范围
-
-- 交付形态：本地 CLI（`rate run`）+ 本地静态报告（`reports/index.html`）
-- 评分链路：问卷主链（六维计算 -> 规则加减分 -> 封顶 -> 等级映射）
-- 融合链路：日志弱修正 + 冲突下调 + Hooks 稳定性补充
-- 解释链路：`source_breakdown`、`conflict_adjustment`、`suggestions` 全量输出
-
-### 输入源职责
-
-- 问卷：唯一基础评分主干
-- 日志：置信度驱动的弱修正与冲突校正
-- Hooks：长期稳定性的小幅奖励，不改写主链口径
-
-### 已知限制
-
-- 当前日志深度仍使用活动代理信号（`sample_size` + `coverage_days`），未接入细粒度行为特征
-- 配置项以 `.env` 覆盖为主，尚未提供独立配置 UI
+- 日志深度仍使用活动代理信号（`sample_size` + `coverage_days`），未接入细粒度行为特征
+- 融合策略配置以 `.env` 覆盖为主，暂无配置 UI
 - 报告为单页静态 HTML，暂无历史趋势可视化
-
-### 后续方向
-
-- 后续阶段：样例扩展、报告增强、融合特征细化（见后续 backlog）
-- 详细变更记录见 `CHANGELOG.md`
